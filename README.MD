@@ -1,1 +1,0 @@
-#This is a Mars rover computer vision project.
