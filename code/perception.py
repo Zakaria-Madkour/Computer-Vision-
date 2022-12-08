@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import cv2
 
@@ -173,4 +175,10 @@ def perception_step(Rover):
     # Rover.nav_angles = rover_centric_angles
     Rover.nav_angles = angles
 
-    return Rover
+
+    # images we want to stream to the debugging mode:
+    # image, warped, threshed,  obstacle map, rock map
+    image_list = [image, warped, threshed, obstacle_map, rock_map]
+
+
+    return Rover , image_list

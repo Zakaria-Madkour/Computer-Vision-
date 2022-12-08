@@ -16,6 +16,7 @@ import json
 import pickle
 import matplotlib.image as mpimg
 import time
+from threading import Thread
 
 # Import functions for perception and decision making
 from perception import perception_step
@@ -25,7 +26,9 @@ from supporting_functions import update_rover, create_output_images
 # Initialize socketio server and Flask application
 # (learn more at: https://python-socketio.readthedocs.io/en/latest/)
 sio = socketio.Server()
+sio2 = socketio.Server()
 app = Flask(__name__)
+app2 = Flask(__name__)
 
 # Read in ground truth map and create 3-channel green version for overplotting
 # NOTE: images are read in by default with the origin (0, 0) in the upper left
@@ -112,7 +115,8 @@ def telemetry(sid, data):
         if np.isfinite(Rover.vel):
 
             # Execute the perception and decision steps to update the Rover's state
-            Rover = perception_step(Rover)
+            Rover, image_list = perception_step(Rover)
+            send_pipeline(image_list)
             Rover = decision_step(Rover)
 
             # Create output images to send to server
@@ -180,6 +184,19 @@ def send_control(commands, image_string1, image_string2):
     eventlet.sleep(0)
 
 
+# Define a function that sends the processing images of the pipeline
+def send_pipeline(list_of_images):
+    data = {
+        'inset_image1': list_of_images[0],
+        'inset_image2': list_of_images[1],
+        'inset_image3': list_of_images[2],
+        'inset_image4': list_of_images[3],
+        'inset_image5': list_of_images[4],
+    }
+    sio2.emit(event="pipeline_broadcast",
+             data=data,
+             skip_sid=True)
+
 # Define a function to send the "pickup" command
 def send_pickup():
     print("Picking up")
@@ -216,6 +233,24 @@ if __name__ == '__main__':
 
     # wrap Flask application with socketio's middleware
     app = socketio.Middleware(sio, app)
+    app2 = socketio.Middleware(sio2, app2)
 
     # deploy as an eventlet WSGI server
-    eventlet.wsgi.server(eventlet.listen(('', 4567)), app)
+    def deploy_server1():
+        eventlet.wsgi.server(eventlet.listen(('', 4567)), app)
+    def deploy_server2():
+        eventlet.wsgi.server(eventlet.listen(('', 1264)), app2)
+
+
+    t1 = Thread(deploy_server1())
+    t2 = Thread(deploy_server2())
+
+    # starting threads
+    t1.start()
+    t1.join()
+    t2.start()
+
+    # joining the threads
+    t1.join()
+    t2.join()
+
