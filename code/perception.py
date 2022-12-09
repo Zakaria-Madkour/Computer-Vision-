@@ -3,6 +3,8 @@ import os
 import numpy as np
 import cv2
 
+show_pipeline = True
+
 
 # Identify pixels above the threshold
 # Threshold of RGB > 160 does a nice job of identifying ground pixels only
@@ -89,8 +91,8 @@ def perspect_transform(img, src, dst):
 
 # Define a function that thresholds the image to find the rocks
 def find_rocks(img, thresh=(110, 110, 50)):
-    rock_pixels = ((img[:, :, 0] > thresh[0])\
-                   & (img[:, :, 1] > thresh[1])\
+    rock_pixels = ((img[:, :, 0] > thresh[0]) \
+                   & (img[:, :, 1] > thresh[1]) \
                    & (img[:, :, 2] < thresh[2]))
 
     colored_pixels = np.zeros_like(img[:, :, 0])
@@ -108,7 +110,7 @@ def perception_step(Rover):
     # ------------ 1) Define source and destination points for perspective transform------------------------------------
 
     # The destination box will be 2*dst_size on each side --> (dont forget to scale back when mapping to world map)
-    dst_size = 5
+    dst_size = 10
 
     bottom_offset = 3
     source = np.float32([[14, 140], [301, 140], [200, 96], [118, 96]])
@@ -146,11 +148,13 @@ def perception_step(Rover):
     # get the actual terrain mapping
     x_world, y_world = pix_to_world(xpix, ypix, Rover.pos[0], Rover.pos[1], Rover.yaw, world_size, scale)
     # get the actual obstacles mapping
-    obs_xpix_world, obs_ypix_world = pix_to_world(obs_xpix, obs_ypix, Rover.pos[0], Rover.pos[1], Rover.yaw, world_size, scale)
+    obs_xpix_world, obs_ypix_world = pix_to_world(obs_xpix, obs_ypix, Rover.pos[0], Rover.pos[1], Rover.yaw, world_size,
+                                                  scale)
     # get the actual rocks mapping
     if rock_map.any():
         rock_xpix, rock_ypix = rover_coords(rock_map)
-        rock_xpix_world, rock_ypix_world = pix_to_world(rock_xpix, rock_ypix, Rover.pos[0], Rover.pos[1], Rover.yaw, world_size, scale)
+        rock_xpix_world, rock_ypix_world = pix_to_world(rock_xpix, rock_ypix, Rover.pos[0], Rover.pos[1], Rover.yaw,
+                                                        world_size, scale)
 
         rock_dist, rock_angle = to_polar_coords(rock_xpix, rock_ypix)
 
@@ -175,10 +179,23 @@ def perception_step(Rover):
     # Rover.nav_angles = rover_centric_angles
     Rover.nav_angles = angles
 
-
     # images we want to stream to the debugging mode:
     # image, warped, threshed,  obstacle map, rock map
-    image_list = [image, warped, threshed, obstacle_map, rock_map]
+
+    if show_pipeline:
+        image_bgt = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        cv2.imshow('Original', image_bgt)
+        warped_bgt = cv2.cvtColor(warped, cv2.COLOR_BGR2RGB)
+        cv2.imshow('Perspective Transform', warped_bgt)
 
 
-    return Rover , image_list
+        cv2.imshow('Threshed terrain', threshed)
+        cv2.imshow('Rock', rock_map)
+        cv2.imshow('Obstacle', obstacle_map)
+
+        world_new = np.zeros((300, 300))
+        world_new[x_world, y_world] = 1
+        cv2.imshow('World Map', world_new)
+        cv2.waitKey(5)
+
+    return Rover
