@@ -210,6 +210,20 @@ def perception_step(Rover):
         world_new[ypix.astype(int), xpix.astype(int)] = 255
         cv2.imshow("Rover Coordinates", world_new)
         '''
+        mean_dir = np.mean(angles)
+        arrow_length = 100
+        x_arrow = arrow_length * np.cos(mean_dir)
+        y_arrow = arrow_length * np.sin(mean_dir)
+        if ((x_arrow == x_arrow) and (y_arrow == y_arrow)):
+            color = (0, 0, 255)
+            thickness = 2
+            view = cv2.rotate(threshed, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            view = cv2.cvtColor(view, cv2.COLOR_GRAY2RGB)
+            start_point = (int(view.shape[1]), int(view.shape[0] / 2))
+            end_point = (int(x_arrow), int(y_arrow) + int(view.shape[0] / 2))
+            direction = cv2.arrowedLine(view, start_point, end_point, color, thickness)
+            direction = cv2.rotate(direction, cv2.ROTATE_180)
+            cv2.imshow('Nav Direction', direction)
 
         cv2.waitKey(5)
 
