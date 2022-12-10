@@ -107,10 +107,15 @@ def perception_step(Rover):
     # TODO: 
     # NOTE: camera image is coming to you in Rover.img
     image = Rover.img
+    # Constraint the world map update based on an accepted range of the pitch and roll
+    pitch_condition = (abs(Rover.pitch) < 7.5) or (abs(Rover.pitch - 360) < 7.5)
+    roll_condition = (abs(Rover.roll) < 3) or (abs(Rover.roll - 360) < 3)
+    condition_to_update_worldmap = pitch_condition and roll_condition
+
     # ------------ 1) Define source and destination points for perspective transform------------------------------------
 
     # The destination box will be 2*dst_size on each side --> (dont forget to scale back when mapping to world map)
-    dst_size = 10
+    dst_size = 8
 
     bottom_offset = 3
     source = np.float32([[14, 140], [301, 140], [200, 96], [118, 96]])
@@ -162,15 +167,17 @@ def perception_step(Rover):
         rock_xcen = rock_xpix_world[rock_idx]
         rock_ycen = rock_ypix_world[rock_idx]
 
-        Rover.worldmap[rock_ycen, rock_xcen, 1] = 255
+        if condition_to_update_worldmap:
+            Rover.worldmap[rock_ycen, rock_xcen, 1] = 255
 
     # ---- 7) Update Rover worldmap (to be displayed on right side of screen) --> fidelity is measured from this map----
     # Example: Rover.worldmap[obstacle_y_world, obstacle_x_world, 0] += 1
-    Rover.worldmap[obs_ypix_world, obs_xpix_world, 0] += 10  # populate the red channel with obstacles
+    if condition_to_update_worldmap:
+        Rover.worldmap[obs_ypix_world, obs_xpix_world, 0] += 10  # populate the red channel with obstacles
     #          Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
 
     #          Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
-    Rover.worldmap[y_world, x_world, 2] += 10  # populate the blue channel with navigable terrain
+        Rover.worldmap[y_world, x_world, 2] += 10  # populate the blue channel with navigable terrain
 
     # 8) Convert rover-centric pixel positions to polar coordinates
     dist, angles = to_polar_coords(xpix, ypix)
@@ -185,17 +192,25 @@ def perception_step(Rover):
     if show_pipeline:
         image_bgt = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         cv2.imshow('Original', image_bgt)
+
         warped_bgt = cv2.cvtColor(warped, cv2.COLOR_BGR2RGB)
         cv2.imshow('Perspective Transform', warped_bgt)
 
-
+        threshed = threshed * 255
         cv2.imshow('Threshed terrain', threshed)
-        cv2.imshow('Rock', rock_map)
+
         cv2.imshow('Obstacle', obstacle_map)
 
+        rock_map = rock_map * 255
+        cv2.imshow('Rock', rock_map)
+
+        '''
+        # still need to debug the rover coordinates map and the real world map
         world_new = np.zeros((300, 300))
-        world_new[x_world, y_world] = 1
-        cv2.imshow('World Map', world_new)
+        world_new[ypix.astype(int), xpix.astype(int)] = 255
+        cv2.imshow("Rover Coordinates", world_new)
+        '''
+
         cv2.waitKey(5)
 
     return Rover
