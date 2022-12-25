@@ -1,9 +1,8 @@
-import os
-
 import numpy as np
 import cv2
 
 show_pipeline = True
+dst_size = 5
 
 
 # Identify pixels above the threshold
@@ -83,7 +82,7 @@ def perspect_transform(img, src, dst):
     M = cv2.getPerspectiveTransform(src, dst)
     warped = cv2.warpPerspective(img, M, (img.shape[1], img.shape[0]))  # keep same size as input image
     ''' To improve the mapping precision we create this mask so that after the perspective transform and color thresh
-        we could deduce the obstacles by subtracting the thres from this mask'''
+        we could deduce the obstacles by subtracting the threshed from this mask'''
     mask = cv2.warpPerspective(np.ones_like(img[:, :, 0]), M, (img.shape[1], img.shape[0]))
 
     return warped, mask
@@ -101,6 +100,13 @@ def find_rocks(img, thresh=(110, 110, 50)):
     return colored_pixels
 
 
+# Define a function that clips the incoming image so as to overcome camera errors for far objects
+# NOTE: the clipping here is in the form of a semicircle
+def limit_view(x_pixels, y_pixels, range=(8) * 2 * dst_size):
+    distance = np.sqrt(x_pixels ** 2, y_pixels ** 2)
+    return x_pixels[distance < range], y_pixels[distance < range]
+
+
 # Apply the above functions in succession and update the Rover state accordingly
 def perception_step(Rover):
     # Perform perception steps to update Rover()
@@ -108,17 +114,17 @@ def perception_step(Rover):
     # NOTE: camera image is coming to you in Rover.img
     image = Rover.img
     # Constraint the world map update based on an accepted range of the pitch and roll
-    pitch_condition = (abs(Rover.pitch) < 7.5) or (abs(Rover.pitch - 360) < 7.5)
-    roll_condition = (abs(Rover.roll) < 3) or (abs(Rover.roll - 360) < 3)
-    condition_to_update_worldmap = pitch_condition and roll_condition
+    pitch_condition = (abs(Rover.pitch) < 1) or (abs(Rover.pitch - 360) < 1)
+    roll_condition = (abs(Rover.roll) < 1) or (abs(Rover.roll - 360) < 1)
+    steering_condition = (abs(Rover.steer) < 6) and (abs(Rover.vel) < 2)
+    condition_to_update_worldmap = pitch_condition and roll_condition and steering_condition
 
     # ------------ 1) Define source and destination points for perspective transform------------------------------------
 
     # The destination box will be 2*dst_size on each side --> (dont forget to scale back when mapping to world map)
-    dst_size = 8
 
     bottom_offset = 3
-    source = np.float32([[14, 140], [301, 140], [200, 96], [118, 96]])
+    source = np.float32([[14, 140], [300, 140], [200, 95], [120, 95]])
     destination = np.float32([[image.shape[1] / 2 - dst_size, image.shape[0] - bottom_offset],
                               [image.shape[1] / 2 + dst_size, image.shape[0] - bottom_offset],
                               [image.shape[1] / 2 + dst_size, image.shape[0] - 2 * dst_size - bottom_offset],
@@ -133,6 +139,12 @@ def perception_step(Rover):
     obstacle_map = np.absolute(np.float32(threshed) - 1) * obstacle_mask
     rock_map = find_rocks(warped, (110, 110, 50))
 
+    # Better performance discovered
+    # Clip the upper 40% of the image as the camera performance deteriorates for long distances
+    percentage_of_clipping = 0.4
+    threshed[0: int(threshed.shape[0] * percentage_of_clipping), :] = 0
+    obstacle_map[0: int(obstacle_map.shape[0] * percentage_of_clipping), :] = 0
+
     # -------------------- 4) Update Rover.vision_image (this will be displayed on left side of screen)-----------------
     # Example: Rover.vision_image[:,:,0] = obstacle color-thresholded binary image
     Rover.vision_image[:, :, 0] = obstacle_map * 255
@@ -145,10 +157,14 @@ def perception_step(Rover):
     # --------------------------------- 5) Convert map image pixel values to rover-centric coords-----------------------
     xpix, ypix = rover_coords(threshed)
     obs_xpix, obs_ypix = rover_coords(obstacle_map)
+    rock_xpix, rock_ypix = rover_coords(rock_map)
 
     # --------------------------------- 6) Convert rover-centric pixel values to world coordinates----------------------
     world_size = Rover.worldmap.shape[0]
     scale = 2 * dst_size
+
+    # xpix_new, ypix_new = limit_view(xpix, ypix)
+    # obs_xpix_new, obs_ypix_new = limit_view(obs_xpix, obs_ypix)
 
     # get the actual terrain mapping
     x_world, y_world = pix_to_world(xpix, ypix, Rover.pos[0], Rover.pos[1], Rover.yaw, world_size, scale)
@@ -156,35 +172,37 @@ def perception_step(Rover):
     obs_xpix_world, obs_ypix_world = pix_to_world(obs_xpix, obs_ypix, Rover.pos[0], Rover.pos[1], Rover.yaw, world_size,
                                                   scale)
     # get the actual rocks mapping
-    if rock_map.any():
-        rock_xpix, rock_ypix = rover_coords(rock_map)
-        rock_xpix_world, rock_ypix_world = pix_to_world(rock_xpix, rock_ypix, Rover.pos[0], Rover.pos[1], Rover.yaw,
-                                                        world_size, scale)
-
-        rock_dist, rock_angle = to_polar_coords(rock_xpix, rock_ypix)
-
-        rock_idx = np.argmin(rock_dist)
-        rock_xcen = rock_xpix_world[rock_idx]
-        rock_ycen = rock_ypix_world[rock_idx]
-
-        if condition_to_update_worldmap:
-            Rover.worldmap[rock_ycen, rock_xcen, 1] = 255
+    rock_xpix_world, rock_ypix_world = pix_to_world(rock_xpix, rock_ypix, Rover.pos[0], Rover.pos[1], Rover.yaw,
+                                                    world_size, scale)
 
     # ---- 7) Update Rover worldmap (to be displayed on right side of screen) --> fidelity is measured from this map----
-    # Example: Rover.worldmap[obstacle_y_world, obstacle_x_world, 0] += 1
     if condition_to_update_worldmap:
-        Rover.worldmap[obs_ypix_world, obs_xpix_world, 0] += 10  # populate the red channel with obstacles
-    #          Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
+        # in walkthrough increment 10 but I will put it 255 (max)
 
-    #          Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
-        Rover.worldmap[y_world, x_world, 2] += 10  # populate the blue channel with navigable terrain
+        # Rover.worldmap[obstacle_y_world, obstacle_x_world, 0] += 1
+        Rover.worldmap[obs_ypix_world, obs_xpix_world, 0] = 255  # populate the red channel with obstacles
+        # Rover.worldmap[rock_y_world, rock_x_world, 1] += 1
+        Rover.worldmap[rock_ypix_world, rock_xpix_world, 1] = 255  # populate green with rocks
+        # Rover.worldmap[navigable_y_world, navigable_x_world, 2] += 1
+        Rover.worldmap[y_world, x_world, 2] = 255  # populate the blue channel with navigable terrain
 
-    # 8) Convert rover-centric pixel positions to polar coordinates
+        # remove overlap measurements by giving the upper hand to the terrain  --> sort of improving fidelity
+        nav_pix = Rover.worldmap[:, :, 2] > 0
+        Rover.worldmap[nav_pix, 0] = 0
+
+    # ------------------------------8) Convert rover-centric pixel positions to polar coordinates-----------------------
+
     dist, angles = to_polar_coords(xpix, ypix)
+    rock_dist, rock_angle = to_polar_coords(rock_xpix, rock_ypix)
     # Update Rover pixel distances and angles
     # Rover.nav_dists = rover_centric_pixel_distances
+    Rover.nav_dists = dist
     # Rover.nav_angles = rover_centric_angles
     Rover.nav_angles = angles
+
+    # Now we update the two added variables to the rover for rock picking
+    Rover.rock_distance_from_rover = rock_dist
+    Rover.rock_angle = rock_angle
 
     # images we want to stream to the debugging mode:
     # image, warped, threshed,  obstacle map, rock map
@@ -211,11 +229,16 @@ def perception_step(Rover):
         cv2.imshow("Rover Coordinates", world_new)
         '''
         mean_dir = np.mean(angles)
-        arrow_length = 100
+        mean_dir2 = np.mean(rock_angle)
+        arrow_length = np.mean(dist)
+        rock_arrow_length = np.mean(rock_dist)
         x_arrow = arrow_length * np.cos(mean_dir)
         y_arrow = arrow_length * np.sin(mean_dir)
+        x_rock = rock_arrow_length * np.cos(mean_dir2)
+        y_rock = rock_arrow_length * np.sin(mean_dir2)
         if ((x_arrow == x_arrow) and (y_arrow == y_arrow)):
             color = (0, 0, 255)
+            color2 = (255, 0, 0)
             thickness = 2
             view = cv2.rotate(threshed, cv2.ROTATE_90_COUNTERCLOCKWISE)
             view = cv2.cvtColor(view, cv2.COLOR_GRAY2RGB)
@@ -224,6 +247,17 @@ def perception_step(Rover):
             direction = cv2.arrowedLine(view, start_point, end_point, color, thickness)
             direction = cv2.rotate(direction, cv2.ROTATE_180)
             cv2.imshow('Nav Direction', direction)
+
+        if ((x_rock == x_rock) and (y_rock == y_rock)):
+            color2 = (255, 0, 0)
+            thickness = 2
+            view = cv2.rotate(rock_map, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            view = cv2.cvtColor(view, cv2.COLOR_GRAY2RGB)
+            start_point = (int(view.shape[1]), int(view.shape[0] / 2))
+            end_point = (int(x_rock), int(y_rock) + int(view.shape[0] / 2))
+            direction = cv2.arrowedLine(view, start_point, end_point, color2, thickness)
+            direction = cv2.rotate(direction, cv2.ROTATE_180)
+            cv2.imshow('Nav Direction in case of rock', direction)
 
         cv2.waitKey(5)
 

@@ -64,7 +64,7 @@ class RoverState():
         # get creative in adding new fields or modifying these!
         self.stop_forward = 50  # Threshold to initiate stopping
         self.go_forward = 500  # Threshold to go forward again
-        self.max_vel = 2  # Maximum velocity (meters/second)
+        self.max_vel = 2  # Maximum velocity (meters/second)------------------------------> was 2 changed to 4
         # Image output from perception step
         # Update this image to display your intermediate analysis steps
         # on screen in autonomous mode
@@ -73,13 +73,18 @@ class RoverState():
         # Update this image with the positions of navigable terrain
         # obstacles and rock samples --> precision is measured based on this map
         self.worldmap = np.zeros((200, 200, 3), dtype=np.float32)
-        self.samples_pos = None  # To store the actual sample positions
+        self.samples_pos = None  # To store the actual sample positions  -------------- used
         self.samples_to_find = 0  # To store the initial count of samples
         self.samples_located = 0  # To store number of samples located on map
         self.samples_collected = 0  # To count the number of samples collected
         self.near_sample = 0  # Will be set to telemetry value data["near_sample"]
         self.picking_up = 0  # Will be set to telemetry value data["picking_up"]
         self.send_pickup = False  # Set to True to trigger rock pickup
+
+        ''' we add two variables to the rover for determining the rock distance and direction from the current position 
+        of the rover to navigate the rover to the rock for pickup'''
+        self.rock_distance_from_rover = None
+        self.rock_direction = None
 
 
 # Initialize our rover
