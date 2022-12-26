@@ -7,7 +7,7 @@ dst_size = 5
 
 # Identify pixels above the threshold
 # Threshold of RGB > 160 does a nice job of identifying ground pixels only
-def color_thresh(img, rgb_thresh=(160, 160, 160)):
+def color_thresh(img, rgb_thresh=(170, 170, 140)):
     # Create an array of zeros same xy size as img, but single channel
     color_select = np.zeros_like(img[:, :, 0])
     # Require that each pixel be above all three threshold values in RGB
@@ -106,13 +106,38 @@ def limit_view(x_pixels, y_pixels, range=(8) * 2 * dst_size):
     distance = np.sqrt(x_pixels ** 2, y_pixels ** 2)
     return x_pixels[distance < range], y_pixels[distance < range]
 
+# Define original clipping functions
+def trim_ellipse(image):
+    # create a mask image of the same shape as input image, filled with 0s (black color)
+    mask = np.zeros_like(image)
+    rows, cols, _ = mask.shape
+    # create a white filled ellipse  ----------> 3/4
+    mask = cv2.ellipse(mask, center=(int(cols / 2), int(rows)), axes=(int(cols / 2), int(rows * 3 / 5)), angle=0,
+                       startAngle=180, endAngle=360, color=(255, 255, 255), thickness=-1)
+    # Bitwise AND operation to black out regions outside the mask
+    return np.bitwise_and(image, mask)
+
+def trim_rectangle(image):
+    # create a mask image of the same shape as input image, filled with 0s (black color)
+    mask = np.zeros_like(image)
+    rows, cols, _ = mask.shape
+    trimed_perc = 0.5
+    start = (0, int(rows * trimed_perc))
+    end = (int(cols), int(rows))
+    # create a white filled rectangle
+    mask = cv2.rectangle(mask, start, end, color=(255, 255, 255), thickness=-1)
+    # Bitwise AND operation to black out regions outside the mask
+    return np.bitwise_and(image, mask)
+
 
 # Apply the above functions in succession and update the Rover state accordingly
 def perception_step(Rover):
     # Perform perception steps to update Rover()
     # TODO: 
     # NOTE: camera image is coming to you in Rover.img
-    image = Rover.img
+    image_original = Rover.img
+    image = trim_ellipse(image_original)
+
     # Constraint the world map update based on an accepted range of the pitch and roll
     pitch_condition = (abs(Rover.pitch) < 1) or (abs(Rover.pitch - 360) < 1)
     roll_condition = (abs(Rover.roll) < 1) or (abs(Rover.roll - 360) < 1)
@@ -141,7 +166,7 @@ def perception_step(Rover):
 
     # Better performance discovered
     # Clip the upper 40% of the image as the camera performance deteriorates for long distances
-    percentage_of_clipping = 0.4
+    percentage_of_clipping = 0.0
     threshed[0: int(threshed.shape[0] * percentage_of_clipping), :] = 0
     obstacle_map[0: int(obstacle_map.shape[0] * percentage_of_clipping), :] = 0
 
@@ -208,8 +233,11 @@ def perception_step(Rover):
     # image, warped, threshed,  obstacle map, rock map
 
     if show_pipeline:
+        original_image = cv2.cvtColor(image_original, cv2.COLOR_BGR2RGB)
+        cv2.imshow('Original', original_image)
+
         image_bgt = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        cv2.imshow('Original', image_bgt)
+        cv2.imshow('Limited view', image_bgt)
 
         warped_bgt = cv2.cvtColor(warped, cv2.COLOR_BGR2RGB)
         cv2.imshow('Perspective Transform', warped_bgt)
