@@ -85,6 +85,8 @@ class RoverState():
         of the rover to navigate the rover to the rock for pickup'''
         self.rock_distance_from_rover = None
         self.rock_direction = None
+        self.rock_stop = 20  # hyper parameter fro tuning
+        self.rock_max_time = 5  # hyperparameter for tuning
 
 
 # Initialize our rover
