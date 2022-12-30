@@ -60,6 +60,18 @@ def hysteresis_threshold(image, high_threshold=(160, 160, 160), low_threshold=(8
     return threshed
 
 
+# Define a function that calls OTSU thresholding on the given image
+def otsu_thresholding(image, blurring_size=(7, 7)):
+    # convert the colored image to grayscale
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    # blurr the image
+    blurred = cv2.GaussianBlur(gray, blurring_size, 0)
+    # apply OTSU's thresholding
+    otsu_threshold, otsu_threshed_image = cv2.threshold(blurred, 0, 1, cv2.THRESH_OTSU)
+
+    return otsu_threshed_image
+
+
 # Define a function to convert from image coords to rover coords
 def rover_coords(binary_img):
     # Identify nonzero pixels
@@ -216,7 +228,7 @@ def perception_step(Rover):
 
     # ---------------- 3) Apply color threshold to identify navigable terrain/obstacles/rock samples--------------------
     # threshed = hysteresis_threshold(warped, (170, 170, 170), (100, 100, 100))
-    threshed = color_thresh(warped, (160, 160, 160))
+    threshed = otsu_thresholding(warped)
     obstacle_map = np.absolute(np.float32(threshed) - 1) * obstacle_mask
     rock_map = find_rocks(warped, (110, 110, 50))
 
