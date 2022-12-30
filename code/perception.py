@@ -22,6 +22,55 @@ def color_thresh(img, rgb_thresh=(170, 170, 140)):
     return color_select
 
 
+# Define a function that applies hysteresis thresholding
+def hysteresis_threshold(image, high_threshold=(160, 160, 160), low_threshold=(80, 80, 80)):
+    # step1 classify pixels to three sets
+    M, N, _ = image.shape
+    threshed = np.zeros_like(image[:, :, 0])
+
+    # strong ground pixels --> terrain for sure
+    strong_threshed = (image[:, :, 0] > high_threshold[0]) \
+                      & (image[:, :, 1] > high_threshold[1]) \
+                      & (image[:, :, 2] > high_threshold[2])
+
+    # obstacles
+    zero_threshed = (image[:, :, 0] < low_threshold[0]) \
+                    & (image[:, :, 1] < low_threshold[1]) \
+                    & (image[:, :, 2] < low_threshold[2])
+
+    # weak edges
+    weak_threshed = (image[:, :, 0] > low_threshold[0]) & (image[:, :, 0] < high_threshold[0]) \
+                    & (image[:, :, 1] > low_threshold[1]) & (image[:, :, 1] < high_threshold[1]) \
+                    & (image[:, :, 2] > low_threshold[2]) & (image[:, :, 2] < high_threshold[2])
+
+    # Set same intensity value for all edge pixels
+    threshed[strong_threshed] = 1
+    threshed[zero_threshed] = 0
+    threshed[weak_threshed] = 127
+
+    # step 2 match weak pixels to high if any of its neighbours is high
+    for i in range(1, M - 1):
+        for j in range(1, N - 1):
+            if threshed[i, j] == 127:
+                if 255 in [threshed[i + 1, j - 1], threshed[i + 1, j], threshed[i + 1, j + 1], threshed[i, j - 1],
+                           threshed[i, j + 1], threshed[i - 1, j - 1], threshed[i - 1, j], threshed[i - 1, j + 1]]:
+                    threshed[i, j] = 1
+                else:
+                    threshed[i, j] = 0
+    return threshed
+
+
+# Define a function to convert from image coords to rover coords
+def rover_coords(binary_img):
+    # Identify nonzero pixels
+    ypos, xpos = binary_img.nonzero()
+    # Calculate pixel positions with reference to the rover position being at the
+    # center bottom of the image.
+    x_pixel = -(ypos - binary_img.shape[0]).astype(np.float)
+    y_pixel = -(xpos - binary_img.shape[1] / 2).astype(np.float)
+    return x_pixel, y_pixel
+
+
 # Define a function to convert from image coords to rover coords
 def rover_coords(binary_img):
     # Identify nonzero pixels
@@ -106,16 +155,18 @@ def limit_view(x_pixels, y_pixels, range=(8) * 2 * dst_size):
     distance = np.sqrt(x_pixels ** 2, y_pixels ** 2)
     return x_pixels[distance < range], y_pixels[distance < range]
 
+
 # Define original clipping functions
-def trim_ellipse(image):
+def trim_ellipse(image, offset, limit):
     # create a mask image of the same shape as input image, filled with 0s (black color)
     mask = np.zeros_like(image)
-    rows, cols, _ = mask.shape
+    rows, cols = mask.shape
     # create a white filled ellipse  ----------> 3/4
-    mask = cv2.ellipse(mask, center=(int(cols / 2), int(rows)), axes=(int(cols / 2), int(rows * 3 / 5)), angle=0,
+    mask = cv2.ellipse(mask, center=(int(cols / 2), int(rows - offset)), axes=(limit, limit), angle=0,
                        startAngle=180, endAngle=360, color=(255, 255, 255), thickness=-1)
     # Bitwise AND operation to black out regions outside the mask
-    return np.bitwise_and(image, mask)
+    return image * mask
+
 
 def trim_rectangle(image):
     # create a mask image of the same shape as input image, filled with 0s (black color)
@@ -135,13 +186,17 @@ def perception_step(Rover):
     # Perform perception steps to update Rover()
     # TODO: 
     # NOTE: camera image is coming to you in Rover.img
-    image_original = Rover.img
-    image = trim_ellipse(image_original)
+    image = image_original = Rover.img
+    # image_blur = cv2.GaussianBlur(image_original, (5, 5), 0)
+    # kernel = np.ones((5, 5), np.float32) / 25
+    # image_blur = cv2.filter2D(image_original, -1, kernel)
+    # image = trim_ellipse(image_blur)
 
     # Constraint the world map update based on an accepted range of the pitch and roll
     pitch_condition = (abs(Rover.pitch) < 1) or (abs(Rover.pitch - 360) < 1)
     roll_condition = (abs(Rover.roll) < 1) or (abs(Rover.roll - 360) < 1)
     steering_condition = (abs(Rover.steer) < 6) and (abs(Rover.vel) < 2)
+    break_condition = Rover.brake == 0
     condition_to_update_worldmap = pitch_condition and roll_condition and steering_condition
 
     # ------------ 1) Define source and destination points for perspective transform------------------------------------
@@ -160,28 +215,41 @@ def perception_step(Rover):
     warped, obstacle_mask = perspect_transform(image, source, destination)
 
     # ---------------- 3) Apply color threshold to identify navigable terrain/obstacles/rock samples--------------------
-    threshed = color_thresh(warped)
+    # threshed = hysteresis_threshold(warped, (170, 170, 170), (100, 100, 100))
+    threshed = color_thresh(warped, (160, 160, 160))
     obstacle_map = np.absolute(np.float32(threshed) - 1) * obstacle_mask
     rock_map = find_rocks(warped, (110, 110, 50))
 
     # Better performance discovered
+    '''
     # Clip the upper 40% of the image as the camera performance deteriorates for long distances
     percentage_of_clipping = 0.0
     threshed[0: int(threshed.shape[0] * percentage_of_clipping), :] = 0
     obstacle_map[0: int(obstacle_map.shape[0] * percentage_of_clipping), :] = 0
+    '''
+    # trimming the perspective transform to provide better mapping fidelity
+
+    # Trimming the decision view window to 8 pixels ahead
+    threshed_decision = trim_ellipse(threshed, bottom_offset, 8 * (2 * dst_size))
+    # Trimming the mapping view window to 4 pixels ahead for better mapping
+    threshed_mapping = trim_ellipse(threshed, bottom_offset, 4 * (2 * dst_size))
+    obstacle_map_mapping = trim_ellipse(obstacle_map, bottom_offset, 4 * (2 * dst_size))
 
     # -------------------- 4) Update Rover.vision_image (this will be displayed on left side of screen)-----------------
     # Example: Rover.vision_image[:,:,0] = obstacle color-thresholded binary image
-    Rover.vision_image[:, :, 0] = obstacle_map * 255
+    Rover.vision_image[:, :, 0] = obstacle_map_mapping
     #          Rover.vision_image[:,:,1] = rock_sample color-thresholded binary image
     if rock_map.any():
         Rover.vision_image[:, :, 1] = rock_map * 255
     #          Rover.vision_image[:,:,2] = navigable terrain color-thresholded binary image
-    Rover.vision_image[:, :, 2] = threshed * 255
+    Rover.vision_image[:, :, 2] = threshed_mapping
 
     # --------------------------------- 5) Convert map image pixel values to rover-centric coords-----------------------
-    xpix, ypix = rover_coords(threshed)
-    obs_xpix, obs_ypix = rover_coords(obstacle_map)
+    # For decision
+    xpix_decision, ypix_decision = rover_coords(threshed_decision)
+    # For mapping
+    xpix, ypix = rover_coords(threshed_mapping)
+    obs_xpix, obs_ypix = rover_coords(obstacle_map_mapping)
     rock_xpix, rock_ypix = rover_coords(rock_map)
 
     # --------------------------------- 6) Convert rover-centric pixel values to world coordinates----------------------
@@ -214,10 +282,13 @@ def perception_step(Rover):
         # remove overlap measurements by giving the upper hand to the terrain  --> sort of improving fidelity
         nav_pix = Rover.worldmap[:, :, 2] > 0
         Rover.worldmap[nav_pix, 0] = 0
+        # remove overlap measurements by giving the upper hand to the rock  --> sort of improving fidelity
+        rock_pix = Rover.worldmap[:, :, 1] > 0
+        Rover.worldmap[rock_pix, 0] = 0
 
     # ------------------------------8) Convert rover-centric pixel positions to polar coordinates-----------------------
 
-    dist, angles = to_polar_coords(xpix, ypix)
+    dist, angles = to_polar_coords(xpix_decision, ypix_decision)
     rock_dist, rock_angle = to_polar_coords(rock_xpix, rock_ypix)
     # Update Rover pixel distances and angles
     # Rover.nav_dists = rover_centric_pixel_distances
@@ -236,19 +307,36 @@ def perception_step(Rover):
         original_image = cv2.cvtColor(image_original, cv2.COLOR_BGR2RGB)
         cv2.imshow('Original', original_image)
 
+        '''
+        blur_image = cv2.cvtColor(image_blur, cv2.COLOR_BGR2RGB)
+        cv2.imshow('Original Blurred', blur_image)
+        '''
+        '''
         image_bgt = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         cv2.imshow('Limited view', image_bgt)
-
+        '''
         warped_bgt = cv2.cvtColor(warped, cv2.COLOR_BGR2RGB)
         cv2.imshow('Perspective Transform', warped_bgt)
 
         threshed = threshed * 255
         cv2.imshow('Threshed terrain', threshed)
 
+        obstacle_map = obstacle_map * 255
         cv2.imshow('Obstacle', obstacle_map)
 
         rock_map = rock_map * 255
         cv2.imshow('Rock', rock_map)
+
+        # Terrain for decision and for mapping
+        threshed_decision = threshed_decision
+        cv2.imshow('Threshed terrain decision', threshed_decision)
+
+        threshed_mapping = threshed_mapping
+        cv2.imshow('Threshed terrain mapping', threshed_mapping)
+
+        # obstacles for mapping
+        obstacle_map_mapping = obstacle_map_mapping
+        cv2.imshow('obstacle mapping', obstacle_map_mapping)
 
         '''
         # still need to debug the rover coordinates map and the real world map
@@ -266,7 +354,6 @@ def perception_step(Rover):
         y_rock = rock_arrow_length * np.sin(mean_dir2)
         if ((x_arrow == x_arrow) and (y_arrow == y_arrow)):
             color = (0, 0, 255)
-            color2 = (255, 0, 0)
             thickness = 2
             view = cv2.rotate(threshed, cv2.ROTATE_90_COUNTERCLOCKWISE)
             view = cv2.cvtColor(view, cv2.COLOR_GRAY2RGB)
