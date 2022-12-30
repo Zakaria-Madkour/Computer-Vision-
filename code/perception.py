@@ -230,10 +230,10 @@ def perception_step(Rover):
     # trimming the perspective transform to provide better mapping fidelity
 
     # Trimming the decision view window to 8 pixels ahead
-    threshed_decision = trim_ellipse(threshed, bottom_offset, 6 * (2 * dst_size))
+    threshed_decision = trim_ellipse(threshed, bottom_offset, 8 * (2 * dst_size))
     # Trimming the mapping view window to 4 pixels ahead for better mapping
-    threshed_mapping = trim_ellipse(threshed, bottom_offset, 4 * (2 * dst_size))
-    obstacle_map_mapping = trim_ellipse(obstacle_map, bottom_offset, 4 * (2 * dst_size))
+    threshed_mapping = trim_ellipse(threshed, bottom_offset, 6 * (2 * dst_size))
+    obstacle_map_mapping = trim_ellipse(obstacle_map, bottom_offset, 6 * (2 * dst_size))
 
     # -------------------- 4) Update Rover.vision_image (this will be displayed on left side of screen)-----------------
     # Example: Rover.vision_image[:,:,0] = obstacle color-thresholded binary image
@@ -297,8 +297,12 @@ def perception_step(Rover):
     Rover.nav_angles = angles
 
     # Now we update the two added variables to the rover for rock picking
+    '''
     Rover.rock_distance_from_rover = rock_dist
     Rover.rock_angle = rock_angle
+    '''
+    Rover.samples_dists = rock_dist
+    Rover.samples_angles = rock_angle
 
     # images we want to stream to the debugging mode:
     # image, warped, threshed,  obstacle map, rock map
