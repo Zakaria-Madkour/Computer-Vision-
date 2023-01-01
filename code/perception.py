@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 
 show_pipeline = True
-dst_size = 5
+dst_size = 8
 
 
 # Identify pixels above the threshold
@@ -208,8 +208,8 @@ def perception_step(Rover):
     pitch_condition = (abs(Rover.pitch) < 1) or (abs(Rover.pitch - 360) < 1)
     roll_condition = (abs(Rover.roll) < 1) or (abs(Rover.roll - 360) < 1)
     steering_condition = (abs(Rover.steer) < 6) and (abs(Rover.vel) < 2)
-    break_condition = Rover.brake == 0
-    condition_to_update_worldmap = pitch_condition and roll_condition and steering_condition
+    brake_condition = Rover.brake == 0
+    condition_to_update_worldmap = pitch_condition and roll_condition and steering_condition and brake_condition
 
     # ------------ 1) Define source and destination points for perspective transform------------------------------------
 
@@ -228,7 +228,7 @@ def perception_step(Rover):
 
     # ---------------- 3) Apply color threshold to identify navigable terrain/obstacles/rock samples--------------------
     # threshed = hysteresis_threshold(warped, (170, 170, 170), (100, 100, 100))
-    threshed = otsu_thresholding(warped)
+    threshed = color_thresh(warped, (180,180,160))
     obstacle_map = np.absolute(np.float32(threshed) - 1) * obstacle_mask
     rock_map = find_rocks(warped, (110, 110, 50))
 

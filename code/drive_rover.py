@@ -16,6 +16,7 @@ import json
 import pickle
 import matplotlib.image as mpimg
 import time
+from simple_pid import PID
 
 # Import functions for perception and decision making
 from perception import perception_step
@@ -41,7 +42,9 @@ class RoverState():
         self.start_time = None # To record the start time of navigation
         self.total_time = None # To record total duration of naviagation
         self.stuck_time = 0 # To record moment that got stuck
+        self.stuck_time_max = 4  # ------------------------------> hyperparameter to be manipulated later
         self.rock_time = 0 # To record moment that started to go for the near rock sample
+        self.rock_time_max = 20 # ------------------------------> hyperparameter to be manipulated later
         self.img = None # Current camera image
         self.pos = None # Current position (x, y)
         self.yaw = None # Current yaw angle
@@ -81,9 +84,16 @@ class RoverState():
         self.near_sample = 0 # Will be set to telemetry value data["near_sample"]
         self.picking_up = 0 # Will be set to telemetry value data["picking_up"]
         self.send_pickup = False # Set to True to trigger rock pickup
+
+
+        self.wall_side = 1 # 1 for right wall -1 for left wall
+        self.offset_weight = 0.8  # weight of the std to be added to the nav direction -> hyperparameter to be manipulated later
 # Initialize our rover 
 Rover = RoverState()
-
+'''
+# Initialize Pid controller
+steer_pid = PID(1, 0.9, 0.9, setpoint=0)
+'''
 # Variables to track frames per second (FPS)
 # Intitialize frame counter
 frame_counter = 0
