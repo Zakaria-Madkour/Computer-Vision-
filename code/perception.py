@@ -205,9 +205,12 @@ def perception_step(Rover):
     # image = trim_ellipse(image_blur)
 
     # Constraint the world map update based on an accepted range of the pitch and roll
-    pitch_condition = (abs(Rover.pitch) < 1) or (abs(Rover.pitch - 360) < 1)
-    roll_condition = (abs(Rover.roll) < 1) or (abs(Rover.roll - 360) < 1)
-    steering_condition = (abs(Rover.steer) < 6) and (abs(Rover.vel) < 2)
+    pitch_limit = Rover.pitch_update_limit
+    pitch_condition = (abs(Rover.pitch) < pitch_limit) or (abs(Rover.pitch - 360) < pitch_limit)
+    roll_limit = Rover.roll_update_limit
+    roll_condition = (abs(Rover.roll) < roll_limit) or (abs(Rover.roll - 360) < roll_limit)
+    steering_limit = Rover.steer_update_limit
+    steering_condition = (abs(Rover.steer) < steering_limit) and (abs(Rover.vel) < 2)
     brake_condition = Rover.brake == 0
     condition_to_update_worldmap = pitch_condition and roll_condition and steering_condition and brake_condition
 
@@ -228,7 +231,8 @@ def perception_step(Rover):
 
     # ---------------- 3) Apply color threshold to identify navigable terrain/obstacles/rock samples--------------------
     # threshed = hysteresis_threshold(warped, (170, 170, 170), (100, 100, 100))
-    threshed = color_thresh(warped, (180,180,160))
+    colors = (Rover.red_threshold, Rover.green_threshold, Rover.blue_threshold)
+    threshed = color_thresh(warped, colors)
     obstacle_map = np.absolute(np.float32(threshed) - 1) * obstacle_mask
     rock_map = find_rocks(warped, (110, 110, 50))
 
@@ -242,10 +246,10 @@ def perception_step(Rover):
     # trimming the perspective transform to provide better mapping fidelity
 
     # Trimming the decision view window to 8 pixels ahead
-    threshed_decision = trim_ellipse(threshed, bottom_offset, 8 * (2 * dst_size))
+    threshed_decision = trim_ellipse(threshed, bottom_offset, Rover.decision_mask_size * (2 * dst_size))
     # Trimming the mapping view window to 4 pixels ahead for better mapping
-    threshed_mapping = trim_ellipse(threshed, bottom_offset, 6 * (2 * dst_size))
-    obstacle_map_mapping = trim_ellipse(obstacle_map, bottom_offset, 6 * (2 * dst_size))
+    threshed_mapping = trim_ellipse(threshed, bottom_offset, Rover.mapping_mask_size * (2 * dst_size))
+    obstacle_map_mapping = trim_ellipse(obstacle_map, bottom_offset, Rover.mapping_mask_size * (2 * dst_size))
 
     # -------------------- 4) Update Rover.vision_image (this will be displayed on left side of screen)-----------------
     # Example: Rover.vision_image[:,:,0] = obstacle color-thresholded binary image

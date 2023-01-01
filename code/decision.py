@@ -24,7 +24,8 @@ def decision_step(Rover):
         # Check for Rover.mode status. I made Rover.mode a stack
         if Rover.mode[-1] == 'forward':
             # if sample rock on sight (in the left side only) and relatively close
-            if Rover.samples_angles is not None and np.mean(Rover.samples_angles) < (wall_side*0.2) and np.min(Rover.samples_dists) < 30:
+            if Rover.samples_angles is not None and np.mean(Rover.samples_angles) < (wall_side*Rover.max_rock_angle) \
+                    and np.min(Rover.samples_dists) < Rover.max_rock_distance:
                 # Rover.steer = np.clip(np.mean(Rover.samples_angles * 180 / np.pi), -15, 15)
                 Rover.rock_time = Rover.total_time
                 Rover.mode.append('rock')
@@ -106,7 +107,7 @@ def decision_step(Rover):
                 Rover.brake = Rover.brake_set
 
             # if got stuck go to stuck mode
-            elif Rover.vel <= 0 and Rover.total_time - Rover.stuck_time > 10:
+            elif Rover.vel <= 0 and Rover.total_time - Rover.stuck_time > Rover.rock_stuck_time_max:
                 Rover.throttle = 0
                 # Set brake to stored brake value
                 Rover.brake = Rover.brake_set
