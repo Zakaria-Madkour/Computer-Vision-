@@ -174,7 +174,7 @@ def trim_ellipse(image, offset, limit):
     mask = np.zeros_like(image)
     rows, cols = mask.shape
     # create a white filled ellipse  ----------> 3/4
-    mask = cv2.ellipse(mask, center=(int(cols / 2), int(rows - offset)), axes=(limit, limit), angle=0,
+    mask = cv2.ellipse(mask, center=(int(cols / 2), int(rows - offset)), axes=(int(limit), int(limit)), angle=0,
                        startAngle=180, endAngle=360, color=(255, 255, 255), thickness=-1)
     # Bitwise AND operation to black out regions outside the mask
     return image * mask

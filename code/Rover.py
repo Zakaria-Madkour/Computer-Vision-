@@ -19,7 +19,7 @@ class RoverState():
         self.stuck_time_max = 4  # ------------------------------> hyperparameter to be manipulated later
         self.rock_time = 0  # To record moment that started to go for the near rock sample
         self.rock_time_max = 20  # ------------------------------> hyperparameter to be manipulated later
-        self.rock_stuck_time_max = 10  # ------------------------------> hyperparameter to be manipulated later
+        self.rock_stuck_time_max = 20  # ------------------------------> hyperparameter to be manipulated later
         self.img = None  # Current camera image
         self.pos = None  # Current position (x, y)
         self.yaw = None  # Current yaw angle
@@ -62,10 +62,10 @@ class RoverState():
 
         self.wall_side = 1  # 1 for right wall -1 for left wall
         self.offset_weight = 0.8  # weight of the std to be added to the nav direction -> hyperparameter to be manipulated later
-
+        self.approch_rock_throttle = 0.2
         # Rock Max distance and angle
-        self.max_rock_distance = 30
-        self.max_rock_angle = 0.2  # --> in rad
+        self.max_rock_distance = 50
+        self.max_rock_angle = 15  # --> in degree
 
         # Perception file
         # Threshold for the navigable terrain

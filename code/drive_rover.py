@@ -27,7 +27,6 @@ from supporting_functions import update_rover, create_output_images
 sio = socketio.Server()
 app = Flask(__name__)
 
-
 # Initialize our rover
 Rover = RoverState()
 '''
