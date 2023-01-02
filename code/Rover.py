@@ -16,7 +16,7 @@ class RoverState():
         self.start_time = None  # To record the start time of navigation
         self.total_time = None  # To record total duration of naviagation
         self.stuck_time = 0  # To record moment that got stuck
-        self.stuck_time_max = 4  # ------------------------------> hyperparameter to be manipulated later
+        self.stuck_time_max = 5  # ------------------------------> hyperparameter to be manipulated later
         self.rock_time = 0  # To record moment that started to go for the near rock sample
         self.rock_time_max = 20  # ------------------------------> hyperparameter to be manipulated later
         self.rock_stuck_time_max = 20  # ------------------------------> hyperparameter to be manipulated later
@@ -62,20 +62,20 @@ class RoverState():
 
         self.wall_side = 1  # 1 for right wall -1 for left wall
         self.offset_weight = 0.8  # weight of the std to be added to the nav direction -> hyperparameter to be manipulated later
-        self.approch_rock_throttle = 0.2
+        self.approch_rock_throttle = 0.5
         # Rock Max distance and angle
         self.max_rock_distance = 50
-        self.max_rock_angle = 15  # --> in degree
+        self.max_rock_angle = 20  # --> in degree
 
         # Perception file
         # Threshold for the navigable terrain
-        self.red_threshold = 180
-        self.green_threshold = 180
+        self.red_threshold = 180  #
+        self.green_threshold = 180  #
         self.blue_threshold = 160
         # limiting the view of the rover
-        self.decision_mask_size = 8
+        self.decision_mask_size = 8  #
         self.mapping_mask_size = 6
         # set limits for pitch roll and steering for update
-        self.steer_update_limit = 6
+        self.steer_update_limit = 5
         self.pitch_update_limit = 1
         self.roll_update_limit = 1

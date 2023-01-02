@@ -24,7 +24,7 @@ def decision_step(Rover):
         # Check for Rover.mode status. I made Rover.mode a stack
         if Rover.mode[-1] == 'forward':
             # if sample rock on sight (in the left side only) and relatively close
-            if Rover.samples_angles is not None and np.mean(Rover.samples_angles * 180/np.pi) < (wall_side*Rover.max_rock_angle) \
+            if Rover.samples_angles is not None and wall_side*np.mean(Rover.samples_angles * 180/np.pi) < (Rover.max_rock_angle) \
                     and np.min(Rover.samples_dists) < Rover.max_rock_distance:
                 # Rover.steer = np.clip(np.mean(Rover.samples_angles * 180 / np.pi), -15, 15)
                 Rover.rock_time = Rover.total_time
@@ -163,7 +163,6 @@ def decision_step(Rover):
     # If in a state where want to pickup a rock send pickup command
     if Rover.near_sample and Rover.vel == 0 and not Rover.picking_up:
         Rover.send_pickup = True
-
     #Rover.steer = PID(Rover.steer)
     return Rover
 
