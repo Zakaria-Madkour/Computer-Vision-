@@ -71,7 +71,7 @@ class RoverState():
         # Threshold for the navigable terrain
         self.red_threshold = 180  #
         self.green_threshold = 180  #
-        self.blue_threshold = 180
+        self.blue_threshold = 160
         # limiting the view of the rover
         self.decision_mask_size = 8  #
         self.mapping_mask_size = 6
